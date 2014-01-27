@@ -10,39 +10,34 @@ from sklearn.neighbors import KDTree
 
 
 def avg_mam_distance_dipy(s1, s2):
-    """Zhang (2008) streamline distance provided by DiPy.
+    """Average treamline distance provided by DiPy (Zhang (2008))
     """
     return mam_distances(s1, s2, metric='avg')
 
 
 def avg_mam_distance_numpy_scipy(s1, s2):
-    """Zhang (2008) streamline distance using NumPy broadcasting and
-    SciPy distance_matrix().
+    """Streamline distance using NumPy broadcasting + SciPy cidst()
     """
     dm = cdist(s1, s2)
     return 0.5 * (dm.min(0).mean() + dm.min(1).mean())
 
 
 def avg_mam_distance_numpy(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting.
+    """Just NumPy broadcasting + (a-b)^2=a^2-2ab+b^2
     """
     dm = np.sqrt((s1 * s1).sum(1)[:, None] - 2.0 * np.dot(s1, s2.T) + (s2 * s2).sum(1))
     return 0.5 * (dm.min(0).mean() + dm.min(1).mean())
 
 
 def avg_mam_distance_numpy_faster(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting
-    and a simple trick to reduce the number of sqrt() evaluations
-    (which impacts on long streamlines).
+    """NumPy broadcasting + less sqrt() evaluations
     """
     dm = (s1 * s1).sum(1)[:, None] - 2.0 * np.dot(s1, s2.T) + (s2 * s2).sum(1)
     return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster2(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting
-    and a simple trick to reduce the number of sqrt() evaluations
-    (which impacts on long streamlines).
+    """Scipy outer + less sqrt() evaluations
     """
     dmx = np.subtract.outer(s1[:,0], s2[:,0])
     dmy = np.subtract.outer(s1[:,1], s2[:,1])
@@ -52,18 +47,14 @@ def avg_mam_distance_numpy_faster2(s1, s2):
 
 
 def avg_mam_distance_numpy_faster3(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting
-    and a simple trick to reduce the number of sqrt() evaluations
-    (which impacts on long streamlines).
+    """sklearn pairwise_distances() + less sqrt evaluations
     """
     dm = pairwise_distances(s1, s2, metric='sqeuclidean')
     return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster4(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting
-    and a simple trick to reduce the number of sqrt() evaluations
-    (which impacts on long streamlines).
+    """Just NumPy broadcasting over each dimension
     """
     dmx = s1[:,0][:, None] - s2[:,0]
     dmy = s1[:,1][:, None] - s2[:,1]
@@ -73,7 +64,7 @@ def avg_mam_distance_numpy_faster4(s1, s2):
 
 
 def avg_mam_distance_numpy_faster5(s1, s2):
-    """Zhang (2008) streamline distance using KDTree.
+    """KDTree construction + query
     """
     kdt1 = KDTree(s1)
     kdt2 = KDTree(s2)
@@ -81,16 +72,13 @@ def avg_mam_distance_numpy_faster5(s1, s2):
 
 
 def avg_mam_distance_numpy_faster6(s1, s2, kdt1, kdt2):
-    """Zhang (2008) streamline distance using KDTree.query() with
-    precomputed trees.
+    """Pre-built KDTrees then query
     """
     return 0.5 * (kdt2.query(s1, k=1)[0].mean() + kdt1.query(s2, k=1)[0].mean())
 
 
 def avg_mam_distance_numpy_faster7(s1, s2):
-    """Zhang (2008) streamline distance using just NumPy broadcasting
-    and a simple trick to reduce the number of sqrt() evaluations
-    (which impacts on long streamlines).
+    """Just NumPy with very compact broacasting
     """
     dm = s1[:, None, :] - s2[None, :, :]
     dm = (dm * dm).sum(2)
@@ -104,25 +92,23 @@ if __name__ == '__main__':
     s1 = np.random.random((100,3))
     s2 = np.random.random((200,3))
 
-    print "avg_mam_distance_dipy(s1, s2) =", avg_mam_distance_dipy(s1, s2)
+    distances= [avg_mam_distance_dipy,
+                avg_mam_distance_numpy_scipy,
+                avg_mam_distance_numpy,
+                avg_mam_distance_numpy_faster,
+                avg_mam_distance_numpy_faster2,
+                avg_mam_distance_numpy_faster3,
+                avg_mam_distance_numpy_faster4,
+                avg_mam_distance_numpy_faster5,
+                avg_mam_distance_numpy_faster7,
+                ]
 
-    print "avg_mam_distance_numpy_scipy(s1, s2) =", avg_mam_distance_numpy_scipy(s1, s2)
-
-    print "avg_mam_distance_numpy(s1, s2) =", avg_mam_distance_numpy(s1, s2)
-
-    print "avg_mam_distance_numpy_faster(s1, s2) =", avg_mam_distance_numpy_faster(s1, s2)
-
-    print "avg_mam_distance_numpy_faster2(s1, s2) =", avg_mam_distance_numpy_faster2(s1, s2)
-
-    print "avg_mam_distance_numpy_faster3(s1, s2) =", avg_mam_distance_numpy_faster3(s1, s2)
-
-    print "avg_mam_distance_numpy_faster4(s1, s2) =", avg_mam_distance_numpy_faster4(s1, s2)
-
-    print "avg_mam_distance_numpy_faster5(s1, s2) =", avg_mam_distance_numpy_faster5(s1, s2)
+    for i, distance in enumerate(distances):
+        print i, ')', distance.__doc__.strip() + '(s1, s2) =', distance(s1, s2)
 
     kdt1 = KDTree(s1)
     kdt2 = KDTree(s2)
-    print "avg_mam_distance_numpy_faster6(s1, s2) =", avg_mam_distance_numpy_faster6(s1, s2, kdt1, kdt2)
+    print i+1, ") avg_mam_distance_numpy_faster6(s1, s2) =", avg_mam_distance_numpy_faster6(s1, s2, kdt1, kdt2)
 
     print
 
@@ -153,89 +139,22 @@ if __name__ == '__main__':
     mam_dm_dipy = bundles_distances_mam(B1, B2, metric='avg')
     print time() - t0 , 'sec.'
 
-    print "Python loop + avg_mam_distance_dipy:", 
-    t0 = time()
-    mam_dm_python_dipy = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_dipy[i, j] = avg_mam_distance_dipy(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_dipy, mam_dm_python_dipy, decimal=5)
+    dms = []
+    for k, distance in enumerate(distances):
+        print k, ')', distance.__doc__.strip(), ':',
+        t0 = time()
+        dm = np.zeros((len(B1), len(B2)))
+        for i in range(len(B1)):
+            for j in range(len(B2)):
+                dm[i, j] = distance(B1[i], B2[j])
+                
+        print time() - t0 , 'sec.'
+        dms.append(dm)
+        if len(dms) > 1:
+            np.testing.assert_almost_equal(dms[-1], dms[-2], decimal=5)
                          
-    print "Python loop + NumPy + Scipy:", 
-    t0 = time()
-    mam_dm_python_numpy_scipy = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_scipy[i, j] = avg_mam_distance_numpy_scipy(B1[i], B2[j])
 
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_dipy, mam_dm_python_numpy_scipy, decimal=5)
-
-    print "Python loop + NumPy:",
-    t0 = time()
-    mam_dm_python_numpy = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy[i, j] = avg_mam_distance_numpy(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_scipy, mam_dm_python_numpy, decimal=5)
-
-    print "Python loop + NumPy (faster implementation):", 
-    t0 = time()
-    mam_dm_python_numpy_faster = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster[i, j] = avg_mam_distance_numpy_faster(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy, mam_dm_python_numpy_faster, decimal=5)
-
-    print "Python loop + NumPy (faster2 implementation):", 
-    t0 = time()
-    mam_dm_python_numpy_faster2 = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster2[i, j] = avg_mam_distance_numpy_faster2(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster, mam_dm_python_numpy_faster2, decimal=5)
-
-    print "Python loop + sklearn's pairwise_distances():", 
-    t0 = time()
-    mam_dm_python_numpy_faster3 = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster3[i, j] = avg_mam_distance_numpy_faster3(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster2, mam_dm_python_numpy_faster3, decimal=5)
-
-    print "Python loop + NumPy (faster4 implementation):", 
-    t0 = time()
-    mam_dm_python_numpy_faster4 = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster4[i, j] = avg_mam_distance_numpy_faster4(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster3, mam_dm_python_numpy_faster4, decimal=5)
-
-
-    print "Python loop + KDTree (faster5 implementation):", 
-    t0 = time()
-    mam_dm_python_numpy_faster5 = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster5[i, j] = avg_mam_distance_numpy_faster5(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster4, mam_dm_python_numpy_faster5, decimal=5)
-
-
-    print "Python loop + KDTree (faster6 implementation):", 
+    print k+1, ') ' + avg_mam_distance_numpy_faster6.__doc__.strip() + ':', 
     t0 = time()
     mam_dm_python_numpy_faster6 = np.zeros((len(B1), len(B2)))
     kdtB2 = [KDTree(s2) for s2 in B2]
@@ -245,15 +164,6 @@ if __name__ == '__main__':
             mam_dm_python_numpy_faster6[i, j] = avg_mam_distance_numpy_faster6(B1[i], B2[j], kdt1, kdtB2[j])
 
     print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster5, mam_dm_python_numpy_faster6, decimal=5)
+    np.testing.assert_almost_equal(dms[-1], mam_dm_python_numpy_faster6, decimal=5)
 
     
-    print "Python loop + NumPy (faster7 implementation):", 
-    t0 = time()
-    mam_dm_python_numpy_faster7 = np.zeros((len(B1), len(B2)))
-    for i in range(len(B1)):
-        for j in range(len(B2)):
-            mam_dm_python_numpy_faster7[i, j] = avg_mam_distance_numpy_faster7(B1[i], B2[j])
-
-    print time() - t0 , 'sec.'
-    np.testing.assert_almost_equal(mam_dm_python_numpy_faster6, mam_dm_python_numpy_faster7, decimal=5)
