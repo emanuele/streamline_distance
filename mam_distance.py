@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial import distance_matrix
+from scipy.spatial.distance import cdist
 from dipy.tracking.distances import mam_distances, bundles_distances_mam
 from time import time
 
@@ -14,7 +15,7 @@ def avg_mam_distance_numpy_scipy(s1, s2):
     """Zhang (2008) streamline distance using NumPy broadcasting and
     SciPy distance_matrix().
     """
-    dm = distance_matrix(s1, s2, p=2)
+    dm = cdist(s1, s2)
     return 0.5 * (dm.min(0).mean() + dm.min(1).mean())
 
 
