@@ -38,8 +38,8 @@ if __name__ == '__main__':
 
     np.random.seed(0)
 
-    s1 = np.random.random((100,3)).astype(np.float32)
-    s2 = np.random.random((200,3)).astype(np.float32)
+    s1 = np.random.random((100,3))
+    s2 = np.random.random((200,3))
 
     print "avg_mam_distance_dipy(s1, s2) =", avg_mam_distance_dipy(s1, s2)
 
