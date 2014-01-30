@@ -1,3 +1,8 @@
+"""Speed comparison of different implementations of the mean average
+minimum distance between two streamlines (and two bundles) as descibed
+in Zhang (2008).
+"""
+
 import numpy as np
 from scipy.spatial import distance_matrix
 from scipy.spatial.distance import cdist
@@ -10,16 +15,19 @@ from sklearn.neighbors import KDTree
 
 
 def avg_mam_distance_dipy(s1, s2):
-    """Average treamline distance provided by DiPy (Zhang (2008))
+    """Average streamline distance provided by DiPy (Zhang (2008))
     """
     return mam_distances(s1, s2, metric='avg')
 
 
-def avg_mam_distance_numpy_scipy(s1, s2):
-    """Streamline distance using NumPy broadcasting + SciPy cidst()
+def avg_mam_distance_scipy(s1, s2):
+    """Streamline distance using SciPy cidst()
+
+    Note: after a recent patch I submitted to SciPy, the speed of this
+    implementation is greatly improved.
     """
-    dm = cdist(s1, s2)
-    return 0.5 * (dm.min(0).mean() + dm.min(1).mean())
+    dm = cdist(s1, s2, metric='sqeuclidean')
+    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy(s1, s2):
@@ -78,7 +86,7 @@ def avg_mam_distance_numpy_faster6(s1, s2, kdt1, kdt2):
 
 
 def avg_mam_distance_numpy_faster7(s1, s2):
-    """Just NumPy with very compact broacasting
+    """Just NumPy with very compact broadcasting
     """
     dm = s1[:, None, :] - s2[None, :, :]
     dm = (dm * dm).sum(2)
@@ -93,7 +101,7 @@ if __name__ == '__main__':
     s2 = np.random.random((200,3))
 
     distances= [avg_mam_distance_dipy,
-                avg_mam_distance_numpy_scipy,
+                avg_mam_distance_scipy,
                 avg_mam_distance_numpy,
                 avg_mam_distance_numpy_faster,
                 avg_mam_distance_numpy_faster2,
