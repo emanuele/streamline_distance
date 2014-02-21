@@ -6,13 +6,14 @@ in Zhang (2008).
 import numpy as np
 from scipy.spatial import distance_matrix
 from scipy.spatial.distance import cdist
-from dipy.tracking.distances import mam_distances, bundles_distances_mam
+# from dipy.tracking.distances import mam_distances, bundles_distances_mam
 from time import time
 from sklearn.metrics import pairwise_distances
 # from scipy.spatial import KDTree
 # from scipy.spatial import cKDTree as KDTree
 from sklearn.neighbors import KDTree
-
+from numba import jit
+from numpy import sqrt
 
 def avg_mam_distance_dipy(s1, s2):
     """Average streamline distance provided by DiPy (Zhang (2008))
@@ -27,13 +28,13 @@ def avg_mam_distance_scipy(s1, s2):
     implementation is greatly improved.
     """
     dm = cdist(s1, s2, metric='sqeuclidean')
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy(s1, s2):
     """Just NumPy broadcasting + (a-b)^2=a^2-2ab+b^2
     """
-    dm = np.sqrt((s1 * s1).sum(1)[:, None] - 2.0 * np.dot(s1, s2.T) + (s2 * s2).sum(1))
+    dm = sqrt((s1 * s1).sum(1)[:, None] - 2.0 * np.dot(s1, s2.T) + (s2 * s2).sum(1))
     return 0.5 * (dm.min(0).mean() + dm.min(1).mean())
 
 
@@ -41,7 +42,7 @@ def avg_mam_distance_numpy_faster(s1, s2):
     """NumPy broadcasting + less sqrt() evaluations
     """
     dm = (s1 * s1).sum(1)[:, None] - 2.0 * np.dot(s1, s2.T) + (s2 * s2).sum(1)
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster2(s1, s2):
@@ -51,14 +52,14 @@ def avg_mam_distance_numpy_faster2(s1, s2):
     dmy = np.subtract.outer(s1[:,1], s2[:,1])
     dmz = np.subtract.outer(s1[:,2], s2[:,2])
     dm = dmx * dmx + dmy * dmy + dmz * dmz
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster3(s1, s2):
     """sklearn pairwise_distances() + less sqrt evaluations
     """
     dm = pairwise_distances(s1, s2, metric='sqeuclidean')
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster4(s1, s2):
@@ -68,7 +69,7 @@ def avg_mam_distance_numpy_faster4(s1, s2):
     dmy = s1[:,1][:, None] - s2[:,1]
     dmz = s1[:,2][:, None] - s2[:,2]
     dm = dmx * dmx + dmy * dmy + dmz * dmz
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
 
 def avg_mam_distance_numpy_faster5(s1, s2):
@@ -90,8 +91,96 @@ def avg_mam_distance_numpy_faster7(s1, s2):
     """
     dm = s1[:, None, :] - s2[None, :, :]
     dm = (dm * dm).sum(2)
-    return 0.5 * (np.sqrt(dm.min(0)).mean() + np.sqrt(dm.min(1)).mean())
+    return 0.5 * (sqrt(dm.min(0)).mean() + sqrt(dm.min(1)).mean())
 
+
+@jit('f8(f8[:,:],f8[:,:])')
+def avg_mam_distance_numba(s1, s2):
+    """Enters Numba.
+    """
+    distance = 0.0
+    size1 = s1.shape[0]
+    size2 = s2.shape[0]
+    dm = np.empty((size1, size2), dtype=np.double)
+    for i in range(size1):
+        dmin = 1000000.0
+        x = s1[i, 0]
+        y = s1[i, 1]
+        z = s1[i, 2]
+        for j in range(size2):
+            tmpx = x - s2[j, 0]
+            tmpy = y - s2[j, 1]
+            tmpz = z - s2[j, 2]
+            dm[i, j] = tmpx * tmpx + tmpy * tmpy + tmpz * tmpz
+
+    dmin1 = dm.min(1)
+    dmin2 = dm.min(0)
+    distance = 0.5 * (sqrt(dmin1).mean() + sqrt(dmin2).mean())
+    return distance
+            
+
+@jit('f8(f8[:,:],f8[:,:])')
+def avg_mam_distance_numba2(s1, s2):
+    """Enters Numba.
+    """
+    distance = 0.0
+    size1 = s1.shape[0]
+    size2 = s2.shape[0]
+    dmin1 = np.ones(size1, dtype=np.double) * 10000
+    dmin2 = np.ones(size2, dtype=np.double) * 10000
+    for i in range(size1):
+        x = s1[i, 0]
+        y = s1[i, 1]
+        z = s1[i, 2]
+        for j in range(size2):
+            tmpx = x - s2[j, 0]
+            tmpy = y - s2[j, 1]
+            tmpz = z - s2[j, 2]
+            d = tmpx * tmpx + tmpy * tmpy + tmpz * tmpz
+            if d < dmin1[i]:
+                dmin1[i] = d
+
+            if d < dmin2[j]:
+                dmin2[j] = d
+
+    return 0.5 * (sqrt(dmin1).mean() + sqrt(dmin2).mean())
+
+            
+@jit('f8(f8[:,:],f8[:,:])')
+def avg_mam_distance_numba3(s1, s2):
+    """Enters Numba.
+    """
+    distance = 0.0
+    size1 = s1.shape[0]
+    size2 = s2.shape[0]
+    dmin1 = np.ones(size1, dtype=np.double) * 10000
+    dmin2 = np.ones(size2, dtype=np.double) * 10000
+    for i in range(size1):
+        x = s1[i, 0]
+        y = s1[i, 1]
+        z = s1[i, 2]
+        for j in range(size2):
+            tmpx = x - s2[j, 0]
+            tmpy = y - s2[j, 1]
+            tmpz = z - s2[j, 2]
+            d = tmpx * tmpx + tmpy * tmpy + tmpz * tmpz
+            if d < dmin1[i]:
+                dmin1[i] = d
+
+            if d < dmin2[j]:
+                dmin2[j] = d
+
+    d12 = 0.0
+    for i in range(size1):
+        d12 += sqrt(dmin1[i])
+
+    d21 = 0.0
+    for j in range(size2):
+        d21 += sqrt(dmin2[j])
+
+    return 0.5 * (d12 / size1 + d21 / size2)
+
+            
 
 if __name__ == '__main__':
 
@@ -100,7 +189,7 @@ if __name__ == '__main__':
     s1 = np.random.random((100,3))
     s2 = np.random.random((200,3))
 
-    distances= [avg_mam_distance_dipy,
+    distances= [#avg_mam_distance_dipy,
                 avg_mam_distance_scipy,
                 avg_mam_distance_numpy,
                 avg_mam_distance_numpy_faster,
@@ -109,10 +198,20 @@ if __name__ == '__main__':
                 avg_mam_distance_numpy_faster4,
                 avg_mam_distance_numpy_faster5,
                 avg_mam_distance_numpy_faster7,
+                avg_mam_distance_numba,
+                avg_mam_distance_numba2,
+                avg_mam_distance_numba3,
                 ]
 
+    
     for i, distance in enumerate(distances):
-        print i, ')', distance.__doc__.strip() + '(s1, s2) =', distance(s1, s2)
+        try:
+            docstring = distance.__doc__.strip()
+        except AttributeError: # Numba Bug?
+            docstring = "MISSING DESCRIPTION"
+
+        print i, ')', docstring + '(s1, s2) =', distance(s1, s2)
+
 
     kdt1 = KDTree(s1)
     kdt2 = KDTree(s2)
@@ -142,14 +241,19 @@ if __name__ == '__main__':
         n2 = np.random.randint(streamline_min_size, streamline_max_size)
         B2.append(np.random.random((n2, 3)))
 
-    print "DiPy's bundles_distances_mam():",
-    t0 = time()
-    mam_dm_dipy = bundles_distances_mam(B1, B2, metric='avg')
-    print time() - t0 , 'sec.'
+    # print "DiPy's bundles_distances_mam():",
+    # t0 = time()
+    # mam_dm_dipy = bundles_distances_mam(B1, B2, metric='avg')
+    # print time() - t0 , 'sec.'
 
     dms = []
     for k, distance in enumerate(distances):
-        print k, ')', distance.__doc__.strip(), ':',
+        try:
+            docstring = distance.__doc__.strip()
+        except AttributeError: # Numba Bug?
+            docstring = "MISSING DESCRIPTION"
+            
+        print k, ')', docstring, ':',
         t0 = time()
         dm = np.zeros((len(B1), len(B2)))
         for i in range(len(B1)):
